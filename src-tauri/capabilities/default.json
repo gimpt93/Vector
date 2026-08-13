@@ -7,6 +7,8 @@
     "core:default",
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-fullscreen",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-ignore-cursor-events",
     "opener:default",
     "sql:default",
     "sql:allow-execute"

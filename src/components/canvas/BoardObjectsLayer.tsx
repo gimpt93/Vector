@@ -19,6 +19,7 @@ type BoardObjectsLayerProps = {
     offsetX: number,
     offsetY: number,
   ) => void;
+  onEditText: (text: Extract<BoardObject, { type: "text" }>) => void;
 };
 
 type StrokeSection = {
@@ -84,6 +85,7 @@ export default function BoardObjectsLayer({
   onSelect,
   onMoveLine,
   onMoveText,
+  onEditText,
 }: BoardObjectsLayerProps) {
   return (
     <Layer>
@@ -210,8 +212,8 @@ export default function BoardObjectsLayer({
             text={object.value}
             fill={object.color}
             fontSize={Math.max(object.fontSize, 36)}
-            fontFamily="Inter, Segoe UI, Arial, sans-serif"
-            fontStyle="bold"
+            fontFamily="Segoe Print, Comic Sans MS, cursive"
+            fontStyle={object.fontWeight ?? "bold"}
             stroke="#ffffff"
             strokeWidth={4}
             fillAfterStrokeEnabled
@@ -220,6 +222,17 @@ export default function BoardObjectsLayer({
             shadowBlur={isSelected ? 8 : 3}
             shadowOffsetY={isSelected ? 0 : 1}
             shadowOpacity={isSelected ? 0.8 : 0.16}
+            lineHeight={1.15}
+            onDblClick={(event) => {
+              if (isControlPressed) return;
+              event.cancelBubble = true;
+              onEditText(object);
+            }}
+            onDblTap={(event) => {
+              if (isControlPressed) return;
+              event.cancelBubble = true;
+              onEditText(object);
+            }}
             onMouseDown={(event) => {
               if (!isControlPressed) {
                 return;

@@ -15,6 +15,8 @@ type ToolbarProps = {
   boardName: string;
   isOverlayMode: boolean;
   canvasOpacity: number;
+  isPassThrough: boolean;
+  isFocusMode: boolean;
   onToolChange: (tool: Tool) => void;
   onMarkerColorChange: (color: string) => void;
   onMarkerWidthChange: (width: number) => void;
@@ -24,6 +26,8 @@ type ToolbarProps = {
   onExit: () => void;
   onToggleOverlay: () => void;
   onCanvasOpacityChange: (opacity: number) => void;
+  onEnablePassThrough: () => void;
+  onToggleFocusMode: () => void;
 };
 
 const tools: { label: string; value: Tool; shortcut: string }[] = [
@@ -44,6 +48,8 @@ export default function Toolbar({
   boardName,
   isOverlayMode,
   canvasOpacity,
+  isPassThrough,
+  isFocusMode,
   onToolChange,
   onMarkerColorChange,
   onMarkerWidthChange,
@@ -53,6 +59,8 @@ export default function Toolbar({
   onExit,
   onToggleOverlay,
   onCanvasOpacityChange,
+  onEnablePassThrough,
+  onToggleFocusMode,
 }: ToolbarProps) {
   return (
     <div className="toolbar-shell">
@@ -102,7 +110,7 @@ export default function Toolbar({
           aria-label={`${color.name} marker`}
         >
           <span
-            className="color-stroke"
+            className={`color-stroke ${color.value === "#ffffff" ? "color-stroke--white" : ""}`}
             style={{ backgroundColor: color.value }}
           />
         </button>
@@ -161,6 +169,15 @@ export default function Toolbar({
 
       <div className="toolbar-divider" />
 
+      <button
+        type="button"
+        className={`focus-toggle ${isFocusMode ? "focus-toggle--active" : ""}`}
+        onClick={onToggleFocusMode}
+        title="Switch between transparent Glass and opaque Focus surfaces"
+      >
+        {isFocusMode ? "Focus" : "Glass"}
+      </button>
+
       {isOverlayMode && (
         <label className="opacity-control" title="Desktop veil opacity">
           <span>Veil</span>
@@ -175,6 +192,18 @@ export default function Toolbar({
         </label>
       )}
 
+      {isOverlayMode && (
+        <button
+          type="button"
+          className="pass-through-button"
+          onClick={onEnablePassThrough}
+          title="Let clicks reach the desktop. Ctrl+Shift+V returns to Vector."
+          disabled={isPassThrough}
+        >
+          Interact below
+        </button>
+      )}
+
       <button
         type="button"
         className={`overlay-button ${isOverlayMode ? "overlay-button--active" : ""}`}
@@ -182,6 +211,10 @@ export default function Toolbar({
       >
         {isOverlayMode ? "Exit overlay" : "Overlay"}
       </button>
+
+      {isOverlayMode && (
+        <span className="shortcut-hint">Ctrl+Shift+V</span>
+      )}
     </div>
   );
 }

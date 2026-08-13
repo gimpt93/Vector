@@ -69,6 +69,8 @@ export function resolveBoardActions(
       objectsById.set(target.id, {
         ...target,
         value: action.value,
+        fontSize: action.fontSize ?? target.fontSize,
+        fontWeight: action.fontWeight ?? target.fontWeight,
       });
     }
   }
