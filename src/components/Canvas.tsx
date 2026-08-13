@@ -46,9 +46,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   const [isOverlayMode, setIsOverlayMode] =
     useState(false);
 
-  const [isPassThrough, setIsPassThrough] =
-    useState(false);
-
   const [canvasOpacity, setCanvasOpacity] =
     useState(0.06);
 
@@ -92,7 +89,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
   const isDrawing = useRef(false);
   const overlayModeRef = useRef(false);
-  const passThroughRef = useRef(false);
   const nextActionId = useRef(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -101,20 +97,8 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   }, [isOverlayMode]);
 
   useEffect(() => {
-    passThroughRef.current = isPassThrough;
-  }, [isPassThrough]);
-
-  useEffect(() => {
     async function handleOverlayShortcut() {
       const currentWindow = getCurrentWindow();
-
-      if (passThroughRef.current) {
-        await currentWindow.setIgnoreCursorEvents(false);
-        await currentWindow.setFocus();
-        passThroughRef.current = false;
-        setIsPassThrough(false);
-        return;
-      }
 
       const nextOverlayMode = !overlayModeRef.current;
       await currentWindow.setAlwaysOnTop(nextOverlayMode);
@@ -631,18 +615,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     }
   }
 
-  async function enablePassThrough() {
-    if (!isOverlayMode) return;
-
-    try {
-      await getCurrentWindow().setIgnoreCursorEvents(true);
-      passThroughRef.current = true;
-      setIsPassThrough(true);
-    } catch (error) {
-      console.error("Could not enable pointer pass-through:", error);
-    }
-  }
-
   async function exitBoard() {
     if (isOverlayMode) {
       const currentWindow = getCurrentWindow();
@@ -814,7 +786,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         boardName={board.name}
         isOverlayMode={isOverlayMode}
         canvasOpacity={canvasOpacity}
-        isPassThrough={isPassThrough}
         isFocusMode={isFocusMode}
         onToolChange={changeTool}
         onMarkerColorChange={setMarkerColor}
@@ -825,7 +796,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         onExit={() => void exitBoard()}
         onToggleOverlay={() => void toggleOverlayMode()}
         onCanvasOpacityChange={setCanvasOpacity}
-        onEnablePassThrough={() => void enablePassThrough()}
         onToggleFocusMode={() => setIsFocusMode((current) => !current)}
       />
     </div>

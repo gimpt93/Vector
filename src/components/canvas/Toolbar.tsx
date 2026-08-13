@@ -15,7 +15,6 @@ type ToolbarProps = {
   boardName: string;
   isOverlayMode: boolean;
   canvasOpacity: number;
-  isPassThrough: boolean;
   isFocusMode: boolean;
   onToolChange: (tool: Tool) => void;
   onMarkerColorChange: (color: string) => void;
@@ -26,7 +25,6 @@ type ToolbarProps = {
   onExit: () => void;
   onToggleOverlay: () => void;
   onCanvasOpacityChange: (opacity: number) => void;
-  onEnablePassThrough: () => void;
   onToggleFocusMode: () => void;
 };
 
@@ -48,7 +46,6 @@ export default function Toolbar({
   boardName,
   isOverlayMode,
   canvasOpacity,
-  isPassThrough,
   isFocusMode,
   onToolChange,
   onMarkerColorChange,
@@ -59,7 +56,6 @@ export default function Toolbar({
   onExit,
   onToggleOverlay,
   onCanvasOpacityChange,
-  onEnablePassThrough,
   onToggleFocusMode,
 }: ToolbarProps) {
   return (
@@ -190,18 +186,6 @@ export default function Toolbar({
             onChange={(event) => onCanvasOpacityChange(Number(event.target.value))}
           />
         </label>
-      )}
-
-      {isOverlayMode && (
-        <button
-          type="button"
-          className="pass-through-button"
-          onClick={onEnablePassThrough}
-          title="Let clicks reach the desktop. Ctrl+Shift+V returns to Vector."
-          disabled={isPassThrough}
-        >
-          Interact below
-        </button>
       )}
 
       <button
