@@ -46,6 +46,9 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   const [isOverlayMode, setIsOverlayMode] =
     useState(false);
 
+  const [isPassThrough, setIsPassThrough] =
+    useState(false);
+
   const [canvasOpacity, setCanvasOpacity] =
     useState(0.06);
 
@@ -89,6 +92,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
   const isDrawing = useRef(false);
   const overlayModeRef = useRef(false);
+  const passThroughRef = useRef(false);
   const nextActionId = useRef(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -97,8 +101,20 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   }, [isOverlayMode]);
 
   useEffect(() => {
+    passThroughRef.current = isPassThrough;
+  }, [isPassThrough]);
+
+  useEffect(() => {
     async function handleOverlayShortcut() {
       const currentWindow = getCurrentWindow();
+
+      if (passThroughRef.current) {
+        await currentWindow.setIgnoreCursorEvents(false);
+        await currentWindow.setFocus();
+        passThroughRef.current = false;
+        setIsPassThrough(false);
+        return;
+      }
 
       const nextOverlayMode = !overlayModeRef.current;
       await currentWindow.setAlwaysOnTop(nextOverlayMode);
@@ -606,6 +622,12 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     const currentWindow = getCurrentWindow();
 
     try {
+      if (!nextOverlayMode && passThroughRef.current) {
+        await currentWindow.setIgnoreCursorEvents(false);
+        passThroughRef.current = false;
+        setIsPassThrough(false);
+      }
+
       await currentWindow.setAlwaysOnTop(nextOverlayMode);
       await currentWindow.setFullscreen(nextOverlayMode);
       overlayModeRef.current = nextOverlayMode;
@@ -615,10 +637,33 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     }
   }
 
+  async function enterDesktopMode() {
+    if (!isOverlayMode) return;
+
+    passThroughRef.current = true;
+    setIsPassThrough(true);
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+
+    try {
+      await getCurrentWindow().setIgnoreCursorEvents(true);
+    } catch (error) {
+      passThroughRef.current = false;
+      setIsPassThrough(false);
+      console.error("Could not enter Desktop interaction mode:", error);
+    }
+  }
+
   async function exitBoard() {
     if (isOverlayMode) {
       const currentWindow = getCurrentWindow();
       await currentWindow.setIgnoreCursorEvents(false);
+      passThroughRef.current = false;
+      setIsPassThrough(false);
       await currentWindow.setFullscreen(false);
       await currentWindow.setAlwaysOnTop(false);
     }
@@ -633,7 +678,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
   return (
     <div
-      className={`canvas-surface ${isOverlayMode ? "canvas-surface--overlay" : ""} ${isFocusMode ? "canvas-surface--focus" : ""}`}
+      className={`canvas-surface ${isOverlayMode ? "canvas-surface--overlay" : ""} ${isFocusMode ? "canvas-surface--focus" : ""} ${isPassThrough ? "canvas-surface--desktop" : ""}`}
       style={{
         position: "relative",
         width: "100vw",
@@ -645,7 +690,9 @@ export default function Canvas({ board, onExit }: CanvasProps) {
             : tool === "pan"
               ? "grab"
               : "crosshair",
-        backgroundColor: isFocusMode
+        backgroundColor: isPassThrough
+          ? "transparent"
+          : isFocusMode
           ? "rgba(248, 250, 253, 0.97)"
           : `rgba(248, 250, 253, ${canvasOpacity})`,
       }}
@@ -744,7 +791,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         />
       </Stage>
 
-      {isOverlayMode && (
+      {isOverlayMode && !isPassThrough && (
         <div className="overlay-edge-glow" aria-hidden="true" />
       )}
 
@@ -775,7 +822,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         />
       )}
 
-      <Toolbar
+      {!isPassThrough && <Toolbar
         tool={tool}
         markerColor={markerColor}
         markerWidth={markerWidth}
@@ -797,7 +844,8 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         onToggleOverlay={() => void toggleOverlayMode()}
         onCanvasOpacityChange={setCanvasOpacity}
         onToggleFocusMode={() => setIsFocusMode((current) => !current)}
-      />
+        onEnterDesktopMode={() => void enterDesktopMode()}
+      />}
     </div>
   );
 }

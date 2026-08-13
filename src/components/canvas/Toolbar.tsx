@@ -26,6 +26,7 @@ type ToolbarProps = {
   onToggleOverlay: () => void;
   onCanvasOpacityChange: (opacity: number) => void;
   onToggleFocusMode: () => void;
+  onEnterDesktopMode: () => void;
 };
 
 const tools: { label: string; value: Tool; shortcut: string }[] = [
@@ -57,6 +58,7 @@ export default function Toolbar({
   onToggleOverlay,
   onCanvasOpacityChange,
   onToggleFocusMode,
+  onEnterDesktopMode,
 }: ToolbarProps) {
   return (
     <div className="toolbar-shell">
@@ -186,6 +188,17 @@ export default function Toolbar({
             onChange={(event) => onCanvasOpacityChange(Number(event.target.value))}
           />
         </label>
+      )}
+
+      {isOverlayMode && (
+        <button
+          type="button"
+          className="desktop-mode-button"
+          onClick={onEnterDesktopMode}
+          title="Interact with the desktop underneath. Ctrl+Shift+V returns to Draw mode."
+        >
+          Desktop
+        </button>
       )}
 
       <button

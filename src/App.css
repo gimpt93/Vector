@@ -18,6 +18,7 @@ body,
 }
 
 .canvas-surface { transition: background-color 180ms ease; }
+.canvas-surface--desktop { background: transparent !important; }
 .overlay-edge-glow { position: fixed; inset: 0; z-index: 25; pointer-events: none; border: 2px solid rgba(104, 137, 246, 0.92); box-shadow: inset 0 0 34px rgba(73, 111, 235, 0.32), inset 0 0 8px rgba(126, 153, 245, 0.38); }
 
 button { font: inherit; }
@@ -51,7 +52,7 @@ button { font: inherit; }
 .toolbar-divider { width: 1px; height: 28px; margin: 0 2px; background: rgba(255, 255, 255, 0.12); }
 .tool-group, .swatch-group, .size-group { display: flex; align-items: center; gap: 4px; }
 
-.tool-button, .history-button, .zoom-button, .size-button, .home-button, .overlay-button, .focus-toggle {
+.tool-button, .history-button, .zoom-button, .size-button, .home-button, .overlay-button, .focus-toggle, .desktop-mode-button {
   height: 32px;
   color: #c7ced9;
   background: transparent;
@@ -60,7 +61,7 @@ button { font: inherit; }
   cursor: pointer;
 }
 .tool-button { display: flex; align-items: center; gap: 7px; padding: 0 9px; }
-.tool-button:hover, .history-button:hover:not(:disabled), .zoom-button:hover, .size-button:hover, .home-button:hover, .overlay-button:hover, .focus-toggle:hover { color: white; background: rgba(255, 255, 255, 0.09); }
+.tool-button:hover, .history-button:hover:not(:disabled), .zoom-button:hover, .size-button:hover, .home-button:hover, .overlay-button:hover, .focus-toggle:hover, .desktop-mode-button:hover { color: white; background: rgba(255, 255, 255, 0.09); }
 .tool-button--active { color: white; font-weight: 650; background: rgba(92, 126, 239, 0.34); box-shadow: inset 0 0 0 1px rgba(139, 162, 242, 0.28); }
 kbd { color: #858f9f; font: 10px/1.4 inherit; }
 .color-swatch { display: grid; width: 35px; height: 30px; padding: 0 5px; place-items: center; background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
@@ -79,6 +80,7 @@ kbd { color: #858f9f; font: 10px/1.4 inherit; }
 .overlay-button--active { color: #dce5ff; background: rgba(92, 126, 239, 0.3); box-shadow: inset 0 0 0 1px rgba(139, 162, 242, 0.3); }
 .focus-toggle { padding: 0 10px; color: #cbd5e5; white-space: nowrap; }
 .focus-toggle--active { color: #ffffff; background: rgba(92,126,239,.34); box-shadow: inset 0 0 0 1px rgba(139,162,242,.28); }
+.desktop-mode-button { padding: 0 10px; color: #d5dded; white-space: nowrap; }
 .shortcut-hint { color: #8792a3; font-size: 9px; white-space: nowrap; }
 .opacity-control { display: flex; align-items: center; gap: 7px; color: #aeb7c5; font-size: 10px; }
 .opacity-control input { width: 70px; accent-color: #7694f5; }
