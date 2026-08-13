@@ -10,19 +10,27 @@ type ToolbarProps = {
   markerWidth: number;
   canUndo: boolean;
   canRedo: boolean;
+  saveStatus: "loading" | "saving" | "saved" | "error";
+  zoom: number;
+  boardName: string;
+  isOverlayMode: boolean;
+  canvasOpacity: number;
   onToolChange: (tool: Tool) => void;
   onMarkerColorChange: (color: string) => void;
   onMarkerWidthChange: (width: number) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onResetView: () => void;
+  onExit: () => void;
+  onToggleOverlay: () => void;
+  onCanvasOpacityChange: (opacity: number) => void;
 };
 
-const tools: { label: string; value: Tool }[] = [
-  { label: "Select", value: "select" },
-  { label: "Marker", value: "draw" },
-  { label: "Eraser", value: "erase" },
-  { label: "Text", value: "text" },
-  { label: "Pan", value: "pan" },
+const tools: { label: string; value: Tool; shortcut: string }[] = [
+  { label: "Text", value: "text", shortcut: "T" },
+  { label: "Marker", value: "draw", shortcut: "B" },
+  { label: "Eraser", value: "erase", shortcut: "E" },
+  { label: "Pan", value: "pan", shortcut: "H" },
 ];
 
 export default function Toolbar({
@@ -31,42 +39,57 @@ export default function Toolbar({
   markerWidth,
   canUndo,
   canRedo,
+  saveStatus,
+  zoom,
+  boardName,
+  isOverlayMode,
+  canvasOpacity,
   onToolChange,
   onMarkerColorChange,
   onMarkerWidthChange,
   onUndo,
   onRedo,
+  onResetView,
+  onExit,
+  onToggleOverlay,
+  onCanvasOpacityChange,
 }: ToolbarProps) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "16px",
-        left: "16px",
-        zIndex: 30,
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "8px",
-        background: "white",
-        border: "1px solid #bbbbbb",
-        borderRadius: "8px",
-      }}
-    >
-      {tools.map(({ label, value }) => (
+    <div className="toolbar-shell">
+      <div className="brand-block">
+        <span className="brand-mark">V</span>
+        <div>
+          <strong>{boardName}</strong>
+          <span className={`save-status save-status--${saveStatus}`}>
+            {saveStatus === "loading" && "Opening board…"}
+            {saveStatus === "saving" && "Saving…"}
+            {saveStatus === "saved" && "Saved locally"}
+            {saveStatus === "error" && "Save failed"}
+          </span>
+        </div>
+      </div>
+
+      <button type="button" className="home-button" onClick={onExit} title="All boards">All boards</button>
+
+      <div className="toolbar-divider" />
+
+      <div className="tool-group" aria-label="Canvas tools">
+      {tools.map(({ label, value, shortcut }) => (
         <button
           key={value}
           type="button"
           onClick={() => onToolChange(value)}
-          style={{
-            fontWeight:
-              tool === value ? "bold" : "normal",
-          }}
+          className={`tool-button ${tool === value ? "tool-button--active" : ""}`}
+          title={`${label} (${shortcut})`}
         >
-          {label}
+          <span>{label}</span><kbd>{shortcut}</kbd>
         </button>
       ))}
+      </div>
 
+      <div className="toolbar-divider" />
+
+      <div className="swatch-group" aria-label="Marker colors">
       {markerColors.map((color) => (
         <button
           key={color.name}
@@ -75,21 +98,18 @@ export default function Toolbar({
           onClick={() =>
             onMarkerColorChange(color.value)
           }
-          style={{
-            width: "28px",
-            height: "28px",
-            padding: 0,
-            backgroundColor: color.value,
-            border:
-              markerColor === color.value
-                ? "3px solid #666666"
-                : "1px solid #bbbbbb",
-            borderRadius: "50%",
-            cursor: "pointer",
-          }}
-        />
+          className={`color-swatch ${markerColor === color.value ? "color-swatch--active" : ""}`}
+          aria-label={`${color.name} marker`}
+        >
+          <span
+            className="color-stroke"
+            style={{ backgroundColor: color.value }}
+          />
+        </button>
       ))}
+      </div>
 
+      <div className="size-group" aria-label="Marker size">
       {markerSizes.map((size) => (
         <button
           key={size.name}
@@ -98,31 +118,69 @@ export default function Toolbar({
             onMarkerWidthChange(size.value);
             onToolChange("draw");
           }}
-          style={{
-            fontWeight:
-              markerWidth === size.value
-                ? "bold"
-                : "normal",
-          }}
+          className={`size-button ${markerWidth === size.value ? "size-button--active" : ""}`}
+          title={`${size.name} marker — ${size.value}px`}
+          aria-label={`${size.name} marker, ${size.value} pixels`}
         >
-          {size.name}
+          <span
+            className="size-stroke"
+            style={{
+              height: `${size.value}px`,
+              backgroundColor: markerColor,
+            }}
+          />
         </button>
       ))}
+      </div>
+
+      <div className="toolbar-divider" />
 
       <button
         type="button"
         onClick={onUndo}
         disabled={!canUndo}
+        className="history-button"
+        title="Undo (Ctrl+Z)"
       >
-        Undo
+        ↶ <span>Undo</span>
       </button>
 
       <button
         type="button"
         onClick={onRedo}
         disabled={!canRedo}
+        className="history-button"
+        title="Redo (Ctrl+Y)"
       >
-        Redo
+        ↷ <span>Redo</span>
+      </button>
+
+      <button type="button" className="zoom-button" onClick={onResetView} title="Reset view">
+        {Math.round(zoom * 100)}%
+      </button>
+
+      <div className="toolbar-divider" />
+
+      {isOverlayMode && (
+        <label className="opacity-control" title="Desktop veil opacity">
+          <span>Veil</span>
+          <input
+            type="range"
+            min="0"
+            max="0.6"
+            step="0.02"
+            value={canvasOpacity}
+            onChange={(event) => onCanvasOpacityChange(Number(event.target.value))}
+          />
+        </label>
+      )}
+
+      <button
+        type="button"
+        className={`overlay-button ${isOverlayMode ? "overlay-button--active" : ""}`}
+        onClick={onToggleOverlay}
+      >
+        {isOverlayMode ? "Exit overlay" : "Overlay"}
       </button>
     </div>
   );

@@ -1,5 +1,4 @@
 export type Tool =
-  | "select"
   | "draw"
   | "erase"
   | "text"
