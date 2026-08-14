@@ -26,8 +26,8 @@ const guideItems = [
   },
   {
     number: "04",
-    title: "Think over anything",
-    detail: "Open the desktop overlay. The blue edge means Vector is ready to draw.",
+    title: "Pin it to your desktop",
+    detail: "Make Vector your desktop board. Normal apps cover it automatically.",
     keys: ["Ctrl", "Shift", "V"],
   },
 ];
@@ -43,44 +43,35 @@ export default function WelcomeGuide({ onDismiss, onStart }: WelcomeGuideProps) 
   }, [onDismiss]);
 
   return (
-    <div className="welcome-backdrop" role="presentation">
-      <section
-        className="welcome-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="welcome-title"
-        aria-describedby="welcome-description"
-      >
-        <button className="welcome-close" type="button" onClick={onDismiss} aria-label="Close welcome guide">×</button>
-        <div className="welcome-heading">
-          <span className="welcome-mark">V</span>
-          <div>
-            <p className="welcome-eyebrow">WELCOME TO VECTOR</p>
-            <h1 id="welcome-title">Your thoughts, above everything.</h1>
-            <p id="welcome-description">A keyboard-first glassboard for notes, lists, and quick sketches—without leaving the work underneath.</p>
-          </div>
+    <section className="home-guide" aria-labelledby="welcome-title" aria-describedby="welcome-description">
+      <button className="welcome-close" type="button" onClick={onDismiss} aria-label="Hide quick guide">×</button>
+      <div className="welcome-heading">
+        <span className="welcome-mark">V</span>
+        <div>
+          <p className="welcome-eyebrow">QUICK START</p>
+          <h2 id="welcome-title">Think first. Draw second.</h2>
+          <p id="welcome-description">Open a board and double-click anywhere to start typing. Everything else can wait until you need it.</p>
         </div>
+      </div>
 
-        <div className="welcome-grid">
-          {guideItems.map((item) => (
-            <article className="welcome-step" key={item.number}>
-              <span className="welcome-step-number">{item.number}</span>
-              <div>
-                <h2>{item.title}</h2>
-                <p>{item.detail}</p>
-                <div className="welcome-keys" aria-label={item.keys.join(" plus ")}>
-                  {item.keys.map((key) => <kbd key={key}>{key}</kbd>)}
-                </div>
+      <div className="welcome-grid">
+        {guideItems.map((item) => (
+          <article className="welcome-step" key={item.number}>
+            <span className="welcome-step-number">{item.number}</span>
+            <div>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+              <div className="welcome-keys" aria-label={item.keys.join(" plus ")}>
+                {item.keys.map((key) => <kbd key={key}>{key}</kbd>)}
               </div>
-            </article>
-          ))}
-        </div>
+            </div>
+          </article>
+        ))}
+      </div>
 
-        <footer className="welcome-actions">
-          <button className="welcome-secondary" type="button" onClick={onDismiss}>Explore on my own</button>
-          <button className="primary-button welcome-primary" type="button" onClick={onStart} autoFocus>Create a board</button>
-        </footer>
-      </section>
-    </div>
+      <footer className="welcome-actions">
+        <button className="primary-button welcome-primary" type="button" onClick={onStart}>Create a board</button>
+      </footer>
+    </section>
   );
 }

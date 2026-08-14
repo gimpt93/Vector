@@ -71,6 +71,13 @@ export default function BoardHome({ onOpenBoard }: BoardHomeProps) {
         <h1>Pick up where you left off.</h1>
         <p className="home-subtitle">A quiet space to sketch, think, and make ideas visible.</p>
 
+        {showWelcome && (
+          <WelcomeGuide
+            onDismiss={dismissWelcome}
+            onStart={() => void addBoard(true)}
+          />
+        )}
+
         {isLoading ? <p className="empty-state">Opening your workspace…</p> : boards.length === 0 ? (
           <button className="empty-state empty-state--action" type="button" onClick={() => void addBoard()}>
             <strong>Create your first board</strong><span>Start with a blank canvas</span>
@@ -92,13 +99,6 @@ export default function BoardHome({ onOpenBoard }: BoardHomeProps) {
           </div>
         )}
       </section>
-
-      {showWelcome && (
-        <WelcomeGuide
-          onDismiss={dismissWelcome}
-          onStart={() => void addBoard(true)}
-        />
-      )}
     </main>
   );
 }
