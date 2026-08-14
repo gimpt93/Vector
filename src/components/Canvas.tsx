@@ -43,10 +43,10 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   const [isControlPressed, setIsControlPressed] =
     useState(false);
 
-  const [isOverlayMode, setIsOverlayMode] =
+  const [isDesktopBoardMode, setIsDesktopBoardMode] =
     useState(false);
 
-  const [isPassThrough, setIsPassThrough] =
+  const [isParked, setIsParked] =
     useState(false);
 
   const [canvasOpacity, setCanvasOpacity] =
@@ -91,49 +91,48 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     useState<TextEditor | null>(null);
 
   const isDrawing = useRef(false);
-  const overlayModeRef = useRef(false);
-  const passThroughRef = useRef(false);
+  const desktopBoardModeRef = useRef(false);
+  const parkedRef = useRef(false);
   const nextActionId = useRef(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    overlayModeRef.current = isOverlayMode;
-  }, [isOverlayMode]);
+    desktopBoardModeRef.current = isDesktopBoardMode;
+  }, [isDesktopBoardMode]);
 
   useEffect(() => {
-    passThroughRef.current = isPassThrough;
-  }, [isPassThrough]);
+    parkedRef.current = isParked;
+  }, [isParked]);
 
   useEffect(() => {
-    async function handleOverlayShortcut() {
-      const currentWindow = getCurrentWindow();
-
-      if (passThroughRef.current) {
-        await currentWindow.setIgnoreCursorEvents(false);
-        await currentWindow.setFocus();
-        passThroughRef.current = false;
-        setIsPassThrough(false);
+    async function handleDesktopBoardShortcut() {
+      if (!desktopBoardModeRef.current) {
+        await changeDesktopBoardWindow(true);
         return;
       }
 
-      const nextOverlayMode = !overlayModeRef.current;
-      await currentWindow.setAlwaysOnTop(nextOverlayMode);
-      await currentWindow.setFullscreen(nextOverlayMode);
-      if (nextOverlayMode) await currentWindow.setFocus();
-      overlayModeRef.current = nextOverlayMode;
-      setIsOverlayMode(nextOverlayMode);
+      if (parkedRef.current) {
+        const currentWindow = getCurrentWindow();
+        await currentWindow.setIgnoreCursorEvents(false);
+        await currentWindow.setFocus();
+        parkedRef.current = false;
+        setIsParked(false);
+        return;
+      }
+
+      await parkDesktopBoard();
     }
 
-    function onOverlayShortcut() {
-      void handleOverlayShortcut().catch((error) => {
-        console.error("Could not toggle Vector overlay:", error);
+    function onDesktopBoardShortcut() {
+      void handleDesktopBoardShortcut().catch((error) => {
+        console.error("Could not toggle Vector desktop board:", error);
       });
     }
 
-    window.addEventListener("vector:overlay-shortcut", onOverlayShortcut);
+    window.addEventListener("vector:overlay-shortcut", onDesktopBoardShortcut);
 
     return () => {
-      window.removeEventListener("vector:overlay-shortcut", onOverlayShortcut);
+      window.removeEventListener("vector:overlay-shortcut", onDesktopBoardShortcut);
     };
   }, []);
 
@@ -617,55 +616,65 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     setTool(nextTool);
   }
 
-  async function toggleOverlayMode() {
-    const nextOverlayMode = !isOverlayMode;
+  async function changeDesktopBoardWindow(nextDesktopBoardMode: boolean) {
     const currentWindow = getCurrentWindow();
 
-    try {
-      if (!nextOverlayMode && passThroughRef.current) {
-        await currentWindow.setIgnoreCursorEvents(false);
-        passThroughRef.current = false;
-        setIsPassThrough(false);
-      }
-
-      await currentWindow.setAlwaysOnTop(nextOverlayMode);
-      await currentWindow.setFullscreen(nextOverlayMode);
-      overlayModeRef.current = nextOverlayMode;
-      setIsOverlayMode(nextOverlayMode);
-    } catch (error) {
-      console.error("Could not change overlay mode:", error);
+    if (parkedRef.current) {
+      await currentWindow.setIgnoreCursorEvents(false);
+      parkedRef.current = false;
+      setIsParked(false);
     }
+
+    if (nextDesktopBoardMode) {
+      await currentWindow.setIgnoreCursorEvents(false);
+      await currentWindow.setAlwaysOnTop(false);
+      await currentWindow.setFullscreen(false);
+      await currentWindow.setDecorations(false);
+      await currentWindow.maximize();
+      await currentWindow.setAlwaysOnBottom(true);
+    } else {
+      await currentWindow.setAlwaysOnBottom(false);
+      await currentWindow.unmaximize();
+      await currentWindow.setDecorations(true);
+      await currentWindow.setFocus();
+    }
+
+    desktopBoardModeRef.current = nextDesktopBoardMode;
+    setIsDesktopBoardMode(nextDesktopBoardMode);
   }
 
-  async function enterDesktopMode() {
-    if (!isOverlayMode) return;
+  async function parkDesktopBoard() {
+    if (!desktopBoardModeRef.current || parkedRef.current) {
+      return;
+    }
 
-    passThroughRef.current = true;
-    setIsPassThrough(true);
+    parkedRef.current = true;
+    setIsParked(true);
 
     await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => resolve());
-      });
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
 
     try {
       await getCurrentWindow().setIgnoreCursorEvents(true);
     } catch (error) {
-      passThroughRef.current = false;
-      setIsPassThrough(false);
-      console.error("Could not enter Desktop interaction mode:", error);
+      parkedRef.current = false;
+      setIsParked(false);
+      throw error;
+    }
+  }
+
+  async function toggleDesktopBoardMode() {
+    try {
+      await changeDesktopBoardWindow(!isDesktopBoardMode);
+    } catch (error) {
+      console.error("Could not change desktop board mode:", error);
     }
   }
 
   async function exitBoard() {
-    if (isOverlayMode) {
-      const currentWindow = getCurrentWindow();
-      await currentWindow.setIgnoreCursorEvents(false);
-      passThroughRef.current = false;
-      setIsPassThrough(false);
-      await currentWindow.setFullscreen(false);
-      await currentWindow.setAlwaysOnTop(false);
+    if (isDesktopBoardMode) {
+      await changeDesktopBoardWindow(false);
     }
 
     onExit();
@@ -678,7 +687,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
   return (
     <div
-      className={`canvas-surface ${isOverlayMode ? "canvas-surface--overlay" : ""} ${isFocusMode ? "canvas-surface--focus" : ""} ${isPassThrough ? "canvas-surface--desktop" : ""}`}
+      className={`canvas-surface ${isDesktopBoardMode ? "canvas-surface--desktop-board" : ""} ${isParked ? "canvas-surface--parked" : ""} ${isFocusMode ? "canvas-surface--focus" : ""}`}
       style={{
         position: "relative",
         width: "100vw",
@@ -690,9 +699,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
             : tool === "pan"
               ? "grab"
               : "crosshair",
-        backgroundColor: isPassThrough
-          ? "transparent"
-          : isFocusMode
+        backgroundColor: isFocusMode
           ? "rgba(248, 250, 253, 0.97)"
           : `rgba(248, 250, 253, ${canvasOpacity})`,
       }}
@@ -791,8 +798,8 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         />
       </Stage>
 
-      {isOverlayMode && !isPassThrough && (
-        <div className="overlay-edge-glow" aria-hidden="true" />
+      {isDesktopBoardMode && (
+        <div className="desktop-board-edge" aria-hidden="true" />
       )}
 
       {textEditor && (
@@ -822,7 +829,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         />
       )}
 
-      {!isPassThrough && <Toolbar
+      {!isParked && <Toolbar
         tool={tool}
         markerColor={markerColor}
         markerWidth={markerWidth}
@@ -831,7 +838,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         saveStatus={saveStatus}
         zoom={camera.scale}
         boardName={board.name}
-        isOverlayMode={isOverlayMode}
+        isDesktopBoardMode={isDesktopBoardMode}
         canvasOpacity={canvasOpacity}
         isFocusMode={isFocusMode}
         onToolChange={changeTool}
@@ -841,11 +848,22 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         onRedo={redoLastAction}
         onResetView={() => setCamera({ x: 0, y: 0, scale: 1 })}
         onExit={() => void exitBoard()}
-        onToggleOverlay={() => void toggleOverlayMode()}
+        onToggleDesktopBoard={() => void toggleDesktopBoardMode()}
+        onParkDesktop={() => void parkDesktopBoard()}
         onCanvasOpacityChange={setCanvasOpacity}
         onToggleFocusMode={() => setIsFocusMode((current) => !current)}
-        onEnterDesktopMode={() => void enterDesktopMode()}
       />}
+
+      {isParked && (
+        <div className="desktop-return-hint" role="status" aria-label="Vector is parked. Press Control Shift V to edit.">
+          <span className="desktop-return-mark">V</span>
+          <span>Vector parked</span>
+          <span className="desktop-return-keys" aria-hidden="true">
+            <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>V</kbd>
+          </span>
+          <span>to edit</span>
+        </div>
+      )}
     </div>
   );
 }

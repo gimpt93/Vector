@@ -6,6 +6,9 @@ import {
   renameBoard,
   type BoardSummary,
 } from "../database/boardDatabase";
+import WelcomeGuide from "./WelcomeGuide";
+
+const welcomeStorageKey = "vector.welcome.v1.dismissed";
 
 type BoardHomeProps = {
   onOpenBoard: (board: BoardSummary) => void;
@@ -14,6 +17,14 @@ type BoardHomeProps = {
 export default function BoardHome({ onOpenBoard }: BoardHomeProps) {
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(
+    () => window.localStorage.getItem(welcomeStorageKey) !== "true",
+  );
+
+  function dismissWelcome() {
+    window.localStorage.setItem(welcomeStorageKey, "true");
+    setShowWelcome(false);
+  }
 
   async function refreshBoards() {
     setBoards(await listBoards());
@@ -24,10 +35,11 @@ export default function BoardHome({ onOpenBoard }: BoardHomeProps) {
     void refreshBoards();
   }, []);
 
-  async function addBoard() {
+  async function addBoard(fromWelcome = false) {
     const name = window.prompt("Name your board", "Untitled board")?.trim();
     if (!name) return;
     const id = await createBoard(name);
+    if (fromWelcome) dismissWelcome();
     onOpenBoard({ id, name, updatedAt: new Date().toISOString() });
   }
 
@@ -48,7 +60,10 @@ export default function BoardHome({ onOpenBoard }: BoardHomeProps) {
     <main className="board-home">
       <header className="home-header">
         <div><span className="brand-mark">V</span><span className="home-brand">Vector</span></div>
-        <button className="primary-button" type="button" onClick={addBoard}>+ New board</button>
+        <div className="home-header-actions">
+          <button className="home-help" type="button" onClick={() => setShowWelcome(true)} title="Quick guide" aria-label="Open quick guide">?</button>
+          <button className="primary-button" type="button" onClick={() => void addBoard()}>+ New board</button>
+        </div>
       </header>
 
       <section className="boards-section">
@@ -56,8 +71,15 @@ export default function BoardHome({ onOpenBoard }: BoardHomeProps) {
         <h1>Pick up where you left off.</h1>
         <p className="home-subtitle">A quiet space to sketch, think, and make ideas visible.</p>
 
+        {showWelcome && (
+          <WelcomeGuide
+            onDismiss={dismissWelcome}
+            onStart={() => void addBoard(true)}
+          />
+        )}
+
         {isLoading ? <p className="empty-state">Opening your workspace…</p> : boards.length === 0 ? (
-          <button className="empty-state empty-state--action" type="button" onClick={addBoard}>
+          <button className="empty-state empty-state--action" type="button" onClick={() => void addBoard()}>
             <strong>Create your first board</strong><span>Start with a blank canvas</span>
           </button>
         ) : (
