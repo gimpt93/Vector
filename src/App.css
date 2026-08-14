@@ -30,7 +30,7 @@ button { font: inherit; }
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   max-width: calc(100vw - 28px);
   padding: 8px 10px;
   transform: translateX(-50%);

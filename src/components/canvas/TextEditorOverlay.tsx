@@ -42,6 +42,16 @@ export default function TextEditorOverlay({
       contentLines.length > 0 &&
       contentLines.every((line) => targetPattern.test(line));
 
+    if (contentLines.length === 0) {
+      const prefix = style === "bullet" ? "• " : "1. ";
+      onChange(prefix);
+      window.setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setSelectionRange(prefix.length, prefix.length);
+      }, 0);
+      return;
+    }
+
     let itemNumber = 0;
     const formatted = lines.map((line) => {
       if (line.trim().length === 0) return line;
@@ -127,6 +137,9 @@ export default function TextEditorOverlay({
           onMouseDown={(event) => {
             event.preventDefault();
             event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
             toggleList("bullet");
           }}
           title="Toggle bullet list"
@@ -140,6 +153,9 @@ export default function TextEditorOverlay({
           aria-pressed={isNumberedList}
           onMouseDown={(event) => {
             event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
             event.stopPropagation();
             toggleList("number");
           }}
