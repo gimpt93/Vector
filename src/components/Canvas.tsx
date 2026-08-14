@@ -6,13 +6,12 @@ import {
 } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Layer, Stage } from "react-konva";
+import { Stage } from "react-konva";
 import {
   loadBoard,
   saveBoard,
   type BoardSummary,
 } from "../database/boardDatabase";
-import Grid from "./Grid";
 import BoardObjectsLayer from "./canvas/BoardObjectsLayer";
 import TextEditorOverlay from "./canvas/TextEditorOverlay";
 import Toolbar from "./canvas/Toolbar";
@@ -23,6 +22,7 @@ import type {
   LineAction,
   MoveAction,
   TextAction,
+  EditTextAction,
   TextEditor,
   Tool,
 } from "./canvas/boardTypes";
@@ -46,8 +46,14 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   const [isOverlayMode, setIsOverlayMode] =
     useState(false);
 
+  const [isPassThrough, setIsPassThrough] =
+    useState(false);
+
   const [canvasOpacity, setCanvasOpacity] =
-    useState(0.14);
+    useState(0.06);
+
+  const [isFocusMode, setIsFocusMode] =
+    useState(false);
 
   const [markerColor, setMarkerColor] =
     useState("#111111");
@@ -85,8 +91,51 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     useState<TextEditor | null>(null);
 
   const isDrawing = useRef(false);
+  const overlayModeRef = useRef(false);
+  const passThroughRef = useRef(false);
   const nextActionId = useRef(1);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    overlayModeRef.current = isOverlayMode;
+  }, [isOverlayMode]);
+
+  useEffect(() => {
+    passThroughRef.current = isPassThrough;
+  }, [isPassThrough]);
+
+  useEffect(() => {
+    async function handleOverlayShortcut() {
+      const currentWindow = getCurrentWindow();
+
+      if (passThroughRef.current) {
+        await currentWindow.setIgnoreCursorEvents(false);
+        await currentWindow.setFocus();
+        passThroughRef.current = false;
+        setIsPassThrough(false);
+        return;
+      }
+
+      const nextOverlayMode = !overlayModeRef.current;
+      await currentWindow.setAlwaysOnTop(nextOverlayMode);
+      await currentWindow.setFullscreen(nextOverlayMode);
+      if (nextOverlayMode) await currentWindow.setFocus();
+      overlayModeRef.current = nextOverlayMode;
+      setIsOverlayMode(nextOverlayMode);
+    }
+
+    function onOverlayShortcut() {
+      void handleOverlayShortcut().catch((error) => {
+        console.error("Could not toggle Vector overlay:", error);
+      });
+    }
+
+    window.addEventListener("vector:overlay-shortcut", onOverlayShortcut);
+
+    return () => {
+      window.removeEventListener("vector:overlay-shortcut", onOverlayShortcut);
+    };
+  }, []);
 
   useEffect(() => {
     function handleResize() {
@@ -314,7 +363,22 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     const trimmedText =
       textEditor.value.trim();
 
-    if (trimmedText.length > 0) {
+    if (trimmedText.length > 0 && textEditor.targetId !== undefined) {
+      const editTextAction: EditTextAction = {
+        id: nextActionId.current,
+        type: "editText",
+        targetId: textEditor.targetId,
+        value: trimmedText,
+        fontSize: textEditor.fontSize,
+        fontWeight: textEditor.fontWeight,
+      };
+
+      nextActionId.current += 1;
+      setHistory((current) => ({
+        actions: [...current.actions, editTextAction],
+        redoActions: [],
+      }));
+    } else if (trimmedText.length > 0) {
       const newText: TextAction = {
         id: nextActionId.current,
         type: "text",
@@ -322,7 +386,8 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         y: textEditor.worldY,
         value: trimmedText,
         color: textEditor.color,
-        fontSize: 40,
+        fontSize: textEditor.fontSize,
+        fontWeight: textEditor.fontWeight,
       };
 
       nextActionId.current += 1;
@@ -346,6 +411,11 @@ export default function Canvas({ board, onExit }: CanvasProps) {
   function handleMouseDown(
     event: KonvaEventObject<MouseEvent>,
   ) {
+    if (textEditor) {
+      commitText();
+      return;
+    }
+
     if (event.evt.ctrlKey || event.evt.metaKey) {
       if (
         event.target ===
@@ -365,15 +435,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     }
 
     if (tool === "text") {
-      setTextEditor({
-        worldX: point.worldX,
-        worldY: point.worldY,
-        screenX: point.screenX,
-        screenY: point.screenY,
-        value: "",
-        color: markerColor,
-      });
-
       return;
     }
 
@@ -429,6 +490,24 @@ export default function Canvas({ board, onExit }: CanvasProps) {
       screenY: point.screenY,
       value: "",
       color: markerColor,
+      fontSize: 40,
+      fontWeight: "bold",
+    });
+  }
+
+  function editText(text: TextAction) {
+    stopDrawing();
+    setSelectedActionId(null);
+    setTextEditor({
+      targetId: text.id,
+      worldX: text.x,
+      worldY: text.y,
+      screenX: text.x * camera.scale + camera.x,
+      screenY: text.y * camera.scale + camera.y,
+      value: text.value,
+      color: text.color,
+      fontSize: Math.max(text.fontSize, 36),
+      fontWeight: text.fontWeight ?? "bold",
     });
   }
 
@@ -543,17 +622,48 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     const currentWindow = getCurrentWindow();
 
     try {
+      if (!nextOverlayMode && passThroughRef.current) {
+        await currentWindow.setIgnoreCursorEvents(false);
+        passThroughRef.current = false;
+        setIsPassThrough(false);
+      }
+
       await currentWindow.setAlwaysOnTop(nextOverlayMode);
       await currentWindow.setFullscreen(nextOverlayMode);
+      overlayModeRef.current = nextOverlayMode;
       setIsOverlayMode(nextOverlayMode);
     } catch (error) {
       console.error("Could not change overlay mode:", error);
     }
   }
 
+  async function enterDesktopMode() {
+    if (!isOverlayMode) return;
+
+    passThroughRef.current = true;
+    setIsPassThrough(true);
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+
+    try {
+      await getCurrentWindow().setIgnoreCursorEvents(true);
+    } catch (error) {
+      passThroughRef.current = false;
+      setIsPassThrough(false);
+      console.error("Could not enter Desktop interaction mode:", error);
+    }
+  }
+
   async function exitBoard() {
     if (isOverlayMode) {
       const currentWindow = getCurrentWindow();
+      await currentWindow.setIgnoreCursorEvents(false);
+      passThroughRef.current = false;
+      setIsPassThrough(false);
       await currentWindow.setFullscreen(false);
       await currentWindow.setAlwaysOnTop(false);
     }
@@ -568,14 +678,23 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
   return (
     <div
-      className={`canvas-surface ${isOverlayMode ? "canvas-surface--overlay" : ""}`}
+      className={`canvas-surface ${isOverlayMode ? "canvas-surface--overlay" : ""} ${isFocusMode ? "canvas-surface--focus" : ""} ${isPassThrough ? "canvas-surface--desktop" : ""}`}
       style={{
         position: "relative",
         width: "100vw",
         height: "100vh",
-        backgroundColor: isOverlayMode
-          ? `rgba(248, 250, 253, ${canvasOpacity})`
-          : "#fbfcfe",
+        cursor: isControlPressed
+          ? "grab"
+          : tool === "text"
+            ? "text"
+            : tool === "pan"
+              ? "grab"
+              : "crosshair",
+        backgroundColor: isPassThrough
+          ? "transparent"
+          : isFocusMode
+          ? "rgba(248, 250, 253, 0.97)"
+          : `rgba(248, 250, 253, ${canvasOpacity})`,
       }}
     >
       <Stage
@@ -658,13 +777,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         onMouseUp={stopDrawing}
         onMouseLeave={stopDrawing}
       >
-        <Layer>
-          <Grid
-            width={windowSize.width}
-            height={windowSize.height}
-          />
-        </Layer>
-
         <BoardObjectsLayer
           objects={resolvedBoard.objects}
           deletedActionIds={
@@ -675,8 +787,13 @@ export default function Canvas({ board, onExit }: CanvasProps) {
           onSelect={setSelectedActionId}
           onMoveLine={moveObject}
           onMoveText={moveObject}
+          onEditText={editText}
         />
       </Stage>
+
+      {isOverlayMode && !isPassThrough && (
+        <div className="overlay-edge-glow" aria-hidden="true" />
+      )}
 
       {textEditor && (
         <TextEditorOverlay
@@ -690,12 +807,22 @@ export default function Canvas({ board, onExit }: CanvasProps) {
                 : current,
             );
           }}
+          onFontSizeChange={(fontSize) => {
+            setTextEditor((current) =>
+              current ? { ...current, fontSize } : current,
+            );
+          }}
+          onFontWeightChange={(fontWeight) => {
+            setTextEditor((current) =>
+              current ? { ...current, fontWeight } : current,
+            );
+          }}
           onCommit={commitText}
           onCancel={cancelText}
         />
       )}
 
-      <Toolbar
+      {!isPassThrough && <Toolbar
         tool={tool}
         markerColor={markerColor}
         markerWidth={markerWidth}
@@ -706,6 +833,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         boardName={board.name}
         isOverlayMode={isOverlayMode}
         canvasOpacity={canvasOpacity}
+        isFocusMode={isFocusMode}
         onToolChange={changeTool}
         onMarkerColorChange={setMarkerColor}
         onMarkerWidthChange={setMarkerWidth}
@@ -715,7 +843,9 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         onExit={() => void exitBoard()}
         onToggleOverlay={() => void toggleOverlayMode()}
         onCanvasOpacityChange={setCanvasOpacity}
-      />
+        onToggleFocusMode={() => setIsFocusMode((current) => !current)}
+        onEnterDesktopMode={() => void enterDesktopMode()}
+      />}
     </div>
   );
 }

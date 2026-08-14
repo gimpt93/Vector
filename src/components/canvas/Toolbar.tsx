@@ -15,6 +15,7 @@ type ToolbarProps = {
   boardName: string;
   isOverlayMode: boolean;
   canvasOpacity: number;
+  isFocusMode: boolean;
   onToolChange: (tool: Tool) => void;
   onMarkerColorChange: (color: string) => void;
   onMarkerWidthChange: (width: number) => void;
@@ -24,6 +25,8 @@ type ToolbarProps = {
   onExit: () => void;
   onToggleOverlay: () => void;
   onCanvasOpacityChange: (opacity: number) => void;
+  onToggleFocusMode: () => void;
+  onEnterDesktopMode: () => void;
 };
 
 const tools: { label: string; value: Tool; shortcut: string }[] = [
@@ -44,6 +47,7 @@ export default function Toolbar({
   boardName,
   isOverlayMode,
   canvasOpacity,
+  isFocusMode,
   onToolChange,
   onMarkerColorChange,
   onMarkerWidthChange,
@@ -53,6 +57,8 @@ export default function Toolbar({
   onExit,
   onToggleOverlay,
   onCanvasOpacityChange,
+  onToggleFocusMode,
+  onEnterDesktopMode,
 }: ToolbarProps) {
   return (
     <div className="toolbar-shell">
@@ -102,7 +108,7 @@ export default function Toolbar({
           aria-label={`${color.name} marker`}
         >
           <span
-            className="color-stroke"
+            className={`color-stroke ${color.value === "#ffffff" ? "color-stroke--white" : ""}`}
             style={{ backgroundColor: color.value }}
           />
         </button>
@@ -161,6 +167,15 @@ export default function Toolbar({
 
       <div className="toolbar-divider" />
 
+      <button
+        type="button"
+        className={`focus-toggle ${isFocusMode ? "focus-toggle--active" : ""}`}
+        onClick={onToggleFocusMode}
+        title="Switch between transparent Glass and opaque Focus surfaces"
+      >
+        {isFocusMode ? "Focus" : "Glass"}
+      </button>
+
       {isOverlayMode && (
         <label className="opacity-control" title="Desktop veil opacity">
           <span>Veil</span>
@@ -175,6 +190,17 @@ export default function Toolbar({
         </label>
       )}
 
+      {isOverlayMode && (
+        <button
+          type="button"
+          className="desktop-mode-button"
+          onClick={onEnterDesktopMode}
+          title="Interact with the desktop underneath. Ctrl+Shift+V returns to Draw mode."
+        >
+          Desktop
+        </button>
+      )}
+
       <button
         type="button"
         className={`overlay-button ${isOverlayMode ? "overlay-button--active" : ""}`}
@@ -182,6 +208,10 @@ export default function Toolbar({
       >
         {isOverlayMode ? "Exit overlay" : "Overlay"}
       </button>
+
+      {isOverlayMode && (
+        <span className="shortcut-hint">Ctrl+Shift+V</span>
+      )}
     </div>
   );
 }

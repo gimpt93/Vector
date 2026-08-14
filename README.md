@@ -8,14 +8,16 @@ The product is built around a simple distinction: text is the primary thinking t
 
 - Multiple named boards with local SQLite persistence
 - Text-first canvas with large, high-contrast notes
-- Double-click anywhere to create text
+- Double-click anywhere to create text; double-click a note to edit it
+- Bold, bullet-list, numbered-list, and text-size controls
 - Marker and eraser tools with visual ink previews
 - Natural marker strokes with tapered entry points
 - `Ctrl` + click + drag object movement
 - Pan and cursor-centered zoom
 - Undo and redo history
-- Translucent, focused canvas toolbar
-- Experimental full-screen desktop overlay with adjustable veil opacity
+- Translucent dark toolbar and Glass/Focus surfaces
+- Full-screen desktop overlay with Draw and click-through Desktop states
+- Global `Ctrl` + `Shift` + `V` overlay shortcut and a subtle Draw-state edge glow
 
 All board data remains local to the device.
 
@@ -24,6 +26,9 @@ All board data remains local to the device.
 | Action | Control |
 | --- | --- |
 | Create a note | Double-click the canvas |
+| Edit a note | Double-click the note |
+| Save a note | `Enter` |
+| Add a line inside a note | `Shift` + `Enter` |
 | Text tool | `T` |
 | Marker | `B` |
 | Eraser | `E` |
@@ -33,6 +38,12 @@ All board data remains local to the device.
 | Undo | `Ctrl` + `Z` |
 | Redo | `Ctrl` + `Y` or `Ctrl` + `Shift` + `Z` |
 | Zoom | Mouse wheel |
+| Enter/exit overlay | `Ctrl` + `Shift` + `V` |
+| Return from Desktop pass-through to Draw | `Ctrl` + `Shift` + `V` |
+
+## Install on Windows
+
+Download the latest Windows installer from [GitHub Releases](https://github.com/gimpt93/Vector/releases/latest). The setup `.exe` is the simplest option; an `.msi` package is also provided.
 
 ## Run locally
 
@@ -71,10 +82,8 @@ Vector is a Tauri 2 desktop application using React, TypeScript, Konva, and SQLi
 
 ## Product direction
 
-Vector is moving toward a fast desktop thinking layer: summon it over existing work, type or draw without changing context, then return control to the application underneath.
-
-The next overlay milestone is a global shortcut and safe pointer pass-through mode. The next drawing milestone is velocity- and pressure-sensitive ink.
+Vector is moving toward a fast desktop thinking layer: summon it over existing work, type or draw without changing context, then return control to the application underneath. The next milestones are a tighter first-run experience, richer ink dynamics, and carefully scoped AI assistance that adds utility without adding toolbar bulk.
 
 ## Status
 
-Vector is an early working prototype under active development. The core board workflow is usable; overlay behavior and cross-platform packaging are still experimental.
+Vector v0.1.0 is a public Windows preview under active development. The core board workflow is usable; overlay behavior and cross-platform packaging should still be treated as preview features.

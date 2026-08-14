@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vector",
+  "productName": "Vector",
   "version": "0.1.0",
   "identifier": "com.vector.app",
   "build": {
@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "vector",
-        "width": 800,
-        "height": 600,
+        "title": "Vector",
+        "width": 1200,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
         "transparent": true
       }
     ],

@@ -1,5 +1,6 @@
 export const markerColors = [
   { name: "Black", value: "#111111" },
+  { name: "White", value: "#ffffff" },
   { name: "Blue", value: "#2563eb" },
   { name: "Green", value: "#15803d" },
   { name: "Red", value: "#dc2626" },

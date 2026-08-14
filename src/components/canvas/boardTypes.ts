@@ -21,6 +21,7 @@ export type TextAction = {
   value: string;
   color: string;
   fontSize: number;
+  fontWeight?: "normal" | "bold";
 };
 
 export type DeleteAction = {
@@ -42,6 +43,8 @@ export type EditTextAction = {
   type: "editText";
   targetId: number;
   value: string;
+  fontSize?: number;
+  fontWeight?: "normal" | "bold";
 };
 
 export type BoardAction =
@@ -61,10 +64,13 @@ export type HistoryState = {
 };
 
 export type TextEditor = {
+  targetId?: number;
   worldX: number;
   worldY: number;
   screenX: number;
   screenY: number;
   value: string;
   color: string;
+  fontSize: number;
+  fontWeight: "normal" | "bold";
 };
