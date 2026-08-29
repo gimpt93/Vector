@@ -8,6 +8,7 @@ export type BoardSummary = {
 };
 
 let databasePromise: Promise<Database> | null = null;
+let saveQueue: Promise<void> = Promise.resolve();
 
 function getDatabase() {
   if (!databasePromise) {
@@ -75,24 +76,29 @@ export async function loadBoard(boardId: number): Promise<string | null> {
   return rows[0]?.board_data ?? null;
 }
 
-export async function saveBoard(
+export function saveBoard(
   boardId: number,
   boardData: string,
 ): Promise<void> {
-  const database = await getDatabase();
+  const queuedSave = saveQueue.then(async () => {
+    const database = await getDatabase();
 
-  await database.execute(
-    `
-      INSERT INTO vector_board (
-        id,
-        board_data,
-        updated_at
-      )
-      VALUES ($1, $2, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET
-        board_data = excluded.board_data,
-        updated_at = CURRENT_TIMESTAMP
-    `,
-    [boardId, boardData],
-  );
+    await database.execute(
+      `
+        INSERT INTO vector_board (
+          id,
+          board_data,
+          updated_at
+        )
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          board_data = excluded.board_data,
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [boardId, boardData],
+    );
+  });
+
+  saveQueue = queuedSave.catch(() => undefined);
+  return queuedSave;
 }
