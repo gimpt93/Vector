@@ -1,22 +1,17 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Stage } from "react-konva";
-import {
-  loadBoard,
-  saveBoard,
-  type BoardSummary,
-} from "../database/boardDatabase";
+import type { BoardSummary } from "../database/boardDatabase";
 import BoardObjectsLayer from "./canvas/BoardObjectsLayer";
 import TextEditorOverlay from "./canvas/TextEditorOverlay";
 import Toolbar from "./canvas/Toolbar";
 import type {
-  BoardAction,
   DeleteAction,
   HistoryState,
   LineAction,
@@ -26,199 +21,67 @@ import type {
   TextEditor,
   Tool,
 } from "./canvas/boardTypes";
-import {
-  redoHistory,
-  resolveBoardActions,
-  undoHistory,
-} from "./canvas/history";
+import { resolveBoardActions } from "./canvas/history";
+import { useBoardPersistence } from "./canvas/useBoardPersistence";
+import { useDesktopBoardOverlay } from "./canvas/useDesktopBoardOverlay";
+import { useWindowSize } from "./canvas/useWindowSize";
 
 type CanvasProps = {
   board: BoardSummary;
   onExit: () => void;
 };
 
+const EMPTY_HISTORY: HistoryState = {
+  actions: [],
+  redoActions: [],
+};
+
 export default function Canvas({ board, onExit }: CanvasProps) {
   const [tool, setTool] = useState<Tool>("text");
-
-  const [isControlPressed, setIsControlPressed] =
-    useState(false);
-
-  const [isOverlayMode, setIsOverlayMode] =
-    useState(false);
-
-  const [isPassThrough, setIsPassThrough] =
-    useState(false);
-
-  const [canvasOpacity, setCanvasOpacity] =
-    useState(0.06);
-
-  const [isFocusMode, setIsFocusMode] =
-    useState(false);
-
-  const [markerColor, setMarkerColor] =
-    useState("#111111");
-
-  const [markerWidth, setMarkerWidth] =
-    useState(4);
-
-  const [selectedActionId, setSelectedActionId] =
-    useState<number | null>(null);
-
-  const [camera, setCamera] = useState({
-    x: 0,
-    y: 0,
-    scale: 1,
-  });
-
-  const [windowSize, setWindowSize] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
-
-  const [history, setHistory] =
-    useState<HistoryState>({
-      actions: [],
-      redoActions: [],
-    });
-
-  const [isBoardLoaded, setIsBoardLoaded] =
-    useState(false);
-
-  const [saveStatus, setSaveStatus] =
-    useState<"loading" | "saving" | "saved" | "error">("loading");
-
-  const [textEditor, setTextEditor] =
-    useState<TextEditor | null>(null);
+  const [isControlPressed, setIsControlPressed] = useState(false);
+  const [canvasOpacity, setCanvasOpacity] = useState(0.06);
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [markerColor, setMarkerColor] = useState("#111111");
+  const [markerWidth, setMarkerWidth] = useState(4);
+  const [selectedActionId, setSelectedActionId] = useState<
+    number | null
+  >(null);
+  const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
+  const [textEditor, setTextEditor] = useState<TextEditor | null>(null);
 
   const isDrawing = useRef(false);
-  const overlayModeRef = useRef(false);
-  const passThroughRef = useRef(false);
   const nextActionId = useRef(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const persistence = useBoardPersistence(board.id, EMPTY_HISTORY);
+  const { history, setHistory, isLoaded, saveStatus } = persistence;
+  const overlay = useDesktopBoardOverlay(onExit);
+  const windowSize = useWindowSize();
+
+  // Pull the next action id from the persistence hook so that the
+  // counter is consistent across boards and reloads.
+  function allocateActionId(): number {
+    const id = nextActionId.current;
+    nextActionId.current += 1;
+    return id;
+  }
+
+  // Keep the local ref in sync with whatever the persistence hook
+  // learned about the highest saved id when the board finished loading.
   useEffect(() => {
-    overlayModeRef.current = isOverlayMode;
-  }, [isOverlayMode]);
-
-  useEffect(() => {
-    passThroughRef.current = isPassThrough;
-  }, [isPassThrough]);
-
-  useEffect(() => {
-    async function handleOverlayShortcut() {
-      const currentWindow = getCurrentWindow();
-
-      if (passThroughRef.current) {
-        await currentWindow.setIgnoreCursorEvents(false);
-        await currentWindow.setFocus();
-        passThroughRef.current = false;
-        setIsPassThrough(false);
-        return;
-      }
-
-      const nextOverlayMode = !overlayModeRef.current;
-      await currentWindow.setAlwaysOnTop(nextOverlayMode);
-      await currentWindow.setFullscreen(nextOverlayMode);
-      if (nextOverlayMode) await currentWindow.setFocus();
-      overlayModeRef.current = nextOverlayMode;
-      setIsOverlayMode(nextOverlayMode);
-    }
-
-    function onOverlayShortcut() {
-      void handleOverlayShortcut().catch((error) => {
-        console.error("Could not toggle Vector overlay:", error);
-      });
-    }
-
-    window.addEventListener("vector:overlay-shortcut", onOverlayShortcut);
-
-    return () => {
-      window.removeEventListener("vector:overlay-shortcut", onOverlayShortcut);
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleResize() {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    }
-
-    window.addEventListener(
-      "resize",
-      handleResize,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize,
+    if (isLoaded) {
+      const highestId = history.actions.reduce(
+        (highest, action) => Math.max(highest, action.id),
+        0,
       );
-    };
-  }, []);
-
-  useEffect(() => {
-    async function restoreBoard() {
-      try {
-        const savedBoard = await loadBoard(board.id);
-
-        if (savedBoard) {
-          const savedActions =
-            JSON.parse(savedBoard) as BoardAction[];
-
-          setHistory({
-            actions: savedActions,
-            redoActions: [],
-          });
-
-          const highestId = savedActions.reduce(
-            (highest, action) =>
-              Math.max(highest, action.id),
-            0,
-          );
-
-          nextActionId.current = highestId + 1;
-        }
-      } catch (error) {
-        console.error(
-          "Could not load Vector board:",
-          error,
-        );
-      } finally {
-        setIsBoardLoaded(true);
-      }
+      nextActionId.current = Math.max(
+        nextActionId.current,
+        highestId + 1,
+      );
     }
+  }, [isLoaded, history.actions]);
 
-    void restoreBoard();
-  }, [board.id]);
-
-  useEffect(() => {
-    if (!isBoardLoaded) {
-      return;
-    }
-
-    setSaveStatus("saving");
-
-    const saveTimer = window.setTimeout(async () => {
-      try {
-        await saveBoard(
-          board.id,
-          JSON.stringify(history.actions),
-        );
-        setSaveStatus("saved");
-      } catch (error) {
-        setSaveStatus("error");
-        console.error(
-          "Could not save Vector board:",
-          error,
-        );
-      }
-    }, 350);
-
-    return () => window.clearTimeout(saveTimer);
-  }, [history.actions, isBoardLoaded]);
-
+  // Focus the text editor's input on the next tick after it opens.
   useEffect(() => {
     if (textEditor) {
       window.setTimeout(() => {
@@ -227,6 +90,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     }
   }, [textEditor]);
 
+  // Keyboard: tool switching, undo/redo, delete, ctrl state.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Control" || event.key === "Meta") {
@@ -235,7 +99,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
       const isEditing =
         inputRef.current === document.activeElement;
-
       if (isEditing) {
         return;
       }
@@ -266,7 +129,6 @@ export default function Canvas({ board, onExit }: CanvasProps) {
           h: "pan",
         };
         const nextTool = shortcuts[event.key.toLowerCase()];
-
         if (nextTool) {
           event.preventDefault();
           changeTool(nextTool);
@@ -276,8 +138,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
       if (
         selectedActionId === null ||
-        (event.key !== "Delete" &&
-          event.key !== "Backspace")
+        (event.key !== "Delete" && event.key !== "Backspace")
       ) {
         return;
       }
@@ -285,21 +146,15 @@ export default function Canvas({ board, onExit }: CanvasProps) {
       event.preventDefault();
 
       const deleteAction: DeleteAction = {
-        id: nextActionId.current,
+        id: allocateActionId(),
         type: "delete",
         targetId: selectedActionId,
       };
 
-      nextActionId.current += 1;
-
       setHistory((current) => ({
-        actions: [
-          ...current.actions,
-          deleteAction,
-        ],
+        actions: [...current.actions, deleteAction],
         redoActions: [],
       }));
-
       setSelectedActionId(null);
     }
 
@@ -313,43 +168,33 @@ export default function Canvas({ board, onExit }: CanvasProps) {
       setIsControlPressed(false);
     }
 
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
+    window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", handleBlur);
 
     return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
+      window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [tool, selectedActionId, history.actions.length, history.redoActions.length]);
+  }, [
+    tool,
+    selectedActionId,
+    history.actions.length,
+    history.redoActions.length,
+  ]);
 
   function getPointerPosition(
     event: KonvaEventObject<MouseEvent | TouchEvent>,
   ) {
     const stage = event.target.getStage();
-    const pointer =
-      stage?.getPointerPosition();
-
+    const pointer = stage?.getPointerPosition();
     if (!pointer) {
       return null;
     }
-
     return {
-      worldX:
-        (pointer.x - camera.x) /
-        camera.scale,
-
-      worldY:
-        (pointer.y - camera.y) /
-        camera.scale,
-
+      worldX: (pointer.x - camera.x) / camera.scale,
+      worldY: (pointer.y - camera.y) / camera.scale,
       screenX: pointer.x,
       screenY: pointer.y,
     };
@@ -359,28 +204,24 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     if (!textEditor) {
       return;
     }
-
-    const trimmedText =
-      textEditor.value.trim();
+    const trimmedText = textEditor.value.trim();
 
     if (trimmedText.length > 0 && textEditor.targetId !== undefined) {
       const editTextAction: EditTextAction = {
-        id: nextActionId.current,
+        id: allocateActionId(),
         type: "editText",
         targetId: textEditor.targetId,
         value: trimmedText,
         fontSize: textEditor.fontSize,
         fontWeight: textEditor.fontWeight,
       };
-
-      nextActionId.current += 1;
       setHistory((current) => ({
         actions: [...current.actions, editTextAction],
         redoActions: [],
       }));
     } else if (trimmedText.length > 0) {
       const newText: TextAction = {
-        id: nextActionId.current,
+        id: allocateActionId(),
         type: "text",
         x: textEditor.worldX,
         y: textEditor.worldY,
@@ -389,14 +230,8 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         fontSize: textEditor.fontSize,
         fontWeight: textEditor.fontWeight,
       };
-
-      nextActionId.current += 1;
-
       setHistory((current) => ({
-        actions: [
-          ...current.actions,
-          newText,
-        ],
+        actions: [...current.actions, newText],
         redoActions: [],
       }));
     }
@@ -408,64 +243,37 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     setTextEditor(null);
   }
 
-  function handleMouseDown(
-    event: KonvaEventObject<MouseEvent>,
-  ) {
+  function handleMouseDown(event: KonvaEventObject<MouseEvent>) {
     if (textEditor) {
       commitText();
       return;
     }
 
     if (event.evt.ctrlKey || event.evt.metaKey) {
-      if (
-        event.target ===
-        event.target.getStage()
-      ) {
+      if (event.target === event.target.getStage()) {
         setSelectedActionId(null);
       }
-
       return;
     }
 
-    const point =
-      getPointerPosition(event);
-
-    if (!point || tool === "pan") {
-      return;
-    }
-
-    if (tool === "text") {
+    const point = getPointerPosition(event);
+    if (!point || tool === "pan" || tool === "text") {
       return;
     }
 
     isDrawing.current = true;
 
     const newLine: LineAction = {
-      id: nextActionId.current,
+      id: allocateActionId(),
       type: "line",
-
-      points: [
-        point.worldX,
-        point.worldY,
-      ],
-
+      points: [point.worldX, point.worldY],
       color: markerColor,
-
-      width:
-        tool === "erase"
-          ? 24
-          : markerWidth,
-
+      width: tool === "erase" ? 24 : markerWidth,
       lineTool: tool,
     };
 
-    nextActionId.current += 1;
-
     setHistory((current) => ({
-      actions: [
-        ...current.actions,
-        newLine,
-      ],
+      actions: [...current.actions, newLine],
       redoActions: [],
     }));
   }
@@ -511,45 +319,27 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     });
   }
 
-  function handleMouseMove(
-    event: KonvaEventObject<MouseEvent>,
-  ) {
-    if (
-      tool === "pan" ||
-      tool === "text" ||
-      !isDrawing.current
-    ) {
+  function handleMouseMove(event: KonvaEventObject<MouseEvent>) {
+    if (tool === "pan" || tool === "text" || !isDrawing.current) {
       return;
     }
 
-    const point =
-      getPointerPosition(event);
-
+    const point = getPointerPosition(event);
     if (!point) {
       return;
     }
 
     setHistory((current) => {
-      const nextActions = [
-        ...current.actions,
-      ];
+      const nextActions = [...current.actions];
+      const lastIndex = nextActions.length - 1;
+      const lastAction = nextActions[lastIndex];
 
-      const lastIndex =
-        nextActions.length - 1;
-
-      const lastAction =
-        nextActions[lastIndex];
-
-      if (
-        !lastAction ||
-        lastAction.type !== "line"
-      ) {
+      if (!lastAction || lastAction.type !== "line") {
         return current;
       }
 
       nextActions[lastIndex] = {
         ...lastAction,
-
         points: [
           ...lastAction.points,
           point.worldX,
@@ -557,10 +347,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         ],
       };
 
-      return {
-        ...current,
-        actions: nextActions,
-      };
+      return { ...current, actions: nextActions };
     });
   }
 
@@ -568,107 +355,106 @@ export default function Canvas({ board, onExit }: CanvasProps) {
     isDrawing.current = false;
   }
 
-  function moveObject(
-    id: number,
-    offsetX: number,
-    offsetY: number,
-  ) {
-    if (offsetX === 0 && offsetY === 0) {
+  function moveLine(id: number, newPoints: number[]) {
+    if (newPoints.length === 0) {
+      return;
+    }
+
+    const resolvedTarget = resolveBoardActions(history.actions).objects.find(
+      (object) => object.id === id,
+    );
+    if (!resolvedTarget || resolvedTarget.type !== "line") {
+      return;
+    }
+
+    if (
+      resolvedTarget.points.length === newPoints.length &&
+      resolvedTarget.points.every(
+        (value, index) => value === newPoints[index],
+      )
+    ) {
       return;
     }
 
     const moveAction: MoveAction = {
-      id: nextActionId.current,
+      id: allocateActionId(),
       type: "move",
       targetId: id,
-      deltaX: offsetX,
-      deltaY: offsetY,
+      points: newPoints,
     };
 
-    nextActionId.current += 1;
-
     setHistory((current) => ({
-      actions: [
-        ...current.actions,
-        moveAction,
-      ],
+      actions: [...current.actions, moveAction],
       redoActions: [],
     }));
   }
 
-  function undoLastAction() {
-    stopDrawing();
-    cancelText();
-    setSelectedActionId(null);
-    setHistory(undoHistory);
+  function moveText(id: number, nextX: number, nextY: number) {
+    const resolvedTarget = resolveBoardActions(history.actions).objects.find(
+      (object) => object.id === id,
+    );
+    if (!resolvedTarget || resolvedTarget.type !== "text") {
+      return;
+    }
+
+    if (nextX === resolvedTarget.x && nextY === resolvedTarget.y) {
+      return;
+    }
+
+    const moveAction: MoveAction = {
+      id: allocateActionId(),
+      type: "move",
+      targetId: id,
+      x: nextX,
+      y: nextY,
+    };
+
+    setHistory((current) => ({
+      actions: [...current.actions, moveAction],
+      redoActions: [],
+    }));
   }
 
-  function redoLastAction() {
+  const undoLastAction = useCallback(() => {
     stopDrawing();
     cancelText();
     setSelectedActionId(null);
-    setHistory(redoHistory);
-  }
+    setHistory((current) => {
+      if (current.actions.length === 0) {
+        return current;
+      }
+      return {
+        actions: current.actions.slice(0, -1),
+        redoActions: [
+          ...current.redoActions,
+          current.actions[current.actions.length - 1]!,
+        ],
+      };
+    });
+  }, [setHistory]);
+
+  const redoLastAction = useCallback(() => {
+    stopDrawing();
+    cancelText();
+    setSelectedActionId(null);
+    setHistory((current) => {
+      if (current.redoActions.length === 0) {
+        return current;
+      }
+      const restored =
+        current.redoActions[current.redoActions.length - 1]!;
+      return {
+        actions: [...current.actions, restored],
+        redoActions: current.redoActions.slice(0, -1),
+      };
+    });
+  }, [setHistory]);
 
   function changeTool(nextTool: Tool) {
     stopDrawing();
     cancelText();
     setSelectedActionId(null);
     setTool(nextTool);
-  }
-
-  async function toggleOverlayMode() {
-    const nextOverlayMode = !isOverlayMode;
-    const currentWindow = getCurrentWindow();
-
-    try {
-      if (!nextOverlayMode && passThroughRef.current) {
-        await currentWindow.setIgnoreCursorEvents(false);
-        passThroughRef.current = false;
-        setIsPassThrough(false);
-      }
-
-      await currentWindow.setAlwaysOnTop(nextOverlayMode);
-      await currentWindow.setFullscreen(nextOverlayMode);
-      overlayModeRef.current = nextOverlayMode;
-      setIsOverlayMode(nextOverlayMode);
-    } catch (error) {
-      console.error("Could not change overlay mode:", error);
-    }
-  }
-
-  async function enterDesktopMode() {
-    if (!isOverlayMode) return;
-
-    passThroughRef.current = true;
-    setIsPassThrough(true);
-
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-
-    try {
-      await getCurrentWindow().setIgnoreCursorEvents(true);
-    } catch (error) {
-      passThroughRef.current = false;
-      setIsPassThrough(false);
-      console.error("Could not enter Desktop interaction mode:", error);
-    }
-  }
-
-  async function exitBoard() {
-    if (isOverlayMode) {
-      const currentWindow = getCurrentWindow();
-      await currentWindow.setIgnoreCursorEvents(false);
-      passThroughRef.current = false;
-      setIsPassThrough(false);
-      await currentWindow.setFullscreen(false);
-      await currentWindow.setAlwaysOnTop(false);
-    }
-
-    onExit();
   }
 
   const resolvedBoard = useMemo(
@@ -678,7 +464,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
 
   return (
     <div
-      className={`canvas-surface ${isOverlayMode ? "canvas-surface--overlay" : ""} ${isFocusMode ? "canvas-surface--focus" : ""} ${isPassThrough ? "canvas-surface--desktop" : ""}`}
+      className={`canvas-surface ${overlay.isDesktopBoardMode ? "canvas-surface--desktop-board" : ""} ${overlay.isParked ? "canvas-surface--parked" : ""} ${isFocusMode ? "canvas-surface--focus" : ""}`}
       style={{
         position: "relative",
         width: "100vw",
@@ -690,9 +476,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
             : tool === "pan"
               ? "grab"
               : "crosshair",
-        backgroundColor: isPassThrough
-          ? "transparent"
-          : isFocusMode
+        backgroundColor: isFocusMode
           ? "rgba(248, 250, 253, 0.97)"
           : `rgba(248, 250, 253, ${canvasOpacity})`,
       }}
@@ -706,13 +490,9 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         scaleY={camera.scale}
         draggable={tool === "pan"}
         onDragEnd={(event) => {
-          if (
-            event.target !==
-            event.target.getStage()
-          ) {
+          if (event.target !== event.target.getStage()) {
             return;
           }
-
           setCamera((current) => ({
             ...current,
             x: event.target.x(),
@@ -721,53 +501,25 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         }}
         onWheel={(event) => {
           event.evt.preventDefault();
-
-          const stage =
-            event.target.getStage();
-
-          const pointer =
-            stage?.getPointerPosition();
-
+          const stage = event.target.getStage();
+          const pointer = stage?.getPointerPosition();
           if (!stage || !pointer) {
             return;
           }
 
-          const oldScale =
-            camera.scale;
-
-          const multiplier =
-            event.evt.deltaY > 0
-              ? 0.9
-              : 1.1;
-
-          const newScale = Math.min(
-            8,
-            Math.max(
-              0.1,
-              oldScale * multiplier,
-            ),
-          );
+          const oldScale = camera.scale;
+          const multiplier = event.evt.deltaY > 0 ? 0.9 : 1.1;
+          const newScale = Math.min(8, Math.max(0.1, oldScale * multiplier));
 
           const worldPoint = {
-            x:
-              (pointer.x - camera.x) /
-              oldScale,
-
-            y:
-              (pointer.y - camera.y) /
-              oldScale,
+            x: (pointer.x - camera.x) / oldScale,
+            y: (pointer.y - camera.y) / oldScale,
           };
 
           setCamera({
             scale: newScale,
-
-            x:
-              pointer.x -
-              worldPoint.x * newScale,
-
-            y:
-              pointer.y -
-              worldPoint.y * newScale,
+            x: pointer.x - worldPoint.x * newScale,
+            y: pointer.y - worldPoint.y * newScale,
           });
         }}
         onMouseDown={handleMouseDown}
@@ -779,20 +531,18 @@ export default function Canvas({ board, onExit }: CanvasProps) {
       >
         <BoardObjectsLayer
           objects={resolvedBoard.objects}
-          deletedActionIds={
-            resolvedBoard.deletedActionIds
-          }
+          deletedActionIds={resolvedBoard.deletedActionIds}
           isControlPressed={isControlPressed}
           selectedActionId={selectedActionId}
           onSelect={setSelectedActionId}
-          onMoveLine={moveObject}
-          onMoveText={moveObject}
+          onMoveLine={moveLine}
+          onMoveText={moveText}
           onEditText={editText}
         />
       </Stage>
 
-      {isOverlayMode && !isPassThrough && (
-        <div className="overlay-edge-glow" aria-hidden="true" />
+      {overlay.isDesktopBoardMode && (
+        <div className="desktop-board-edge" aria-hidden="true" />
       )}
 
       {textEditor && (
@@ -802,9 +552,7 @@ export default function Canvas({ board, onExit }: CanvasProps) {
           inputRef={inputRef}
           onChange={(value) => {
             setTextEditor((current) =>
-              current
-                ? { ...current, value }
-                : current,
+              current ? { ...current, value } : current,
             );
           }}
           onFontSizeChange={(fontSize) => {
@@ -822,30 +570,49 @@ export default function Canvas({ board, onExit }: CanvasProps) {
         />
       )}
 
-      {!isPassThrough && <Toolbar
-        tool={tool}
-        markerColor={markerColor}
-        markerWidth={markerWidth}
-        canUndo={history.actions.length > 0}
-        canRedo={history.redoActions.length > 0}
-        saveStatus={saveStatus}
-        zoom={camera.scale}
-        boardName={board.name}
-        isOverlayMode={isOverlayMode}
-        canvasOpacity={canvasOpacity}
-        isFocusMode={isFocusMode}
-        onToolChange={changeTool}
-        onMarkerColorChange={setMarkerColor}
-        onMarkerWidthChange={setMarkerWidth}
-        onUndo={undoLastAction}
-        onRedo={redoLastAction}
-        onResetView={() => setCamera({ x: 0, y: 0, scale: 1 })}
-        onExit={() => void exitBoard()}
-        onToggleOverlay={() => void toggleOverlayMode()}
-        onCanvasOpacityChange={setCanvasOpacity}
-        onToggleFocusMode={() => setIsFocusMode((current) => !current)}
-        onEnterDesktopMode={() => void enterDesktopMode()}
-      />}
+      {!overlay.isParked && (
+        <Toolbar
+          tool={tool}
+          markerColor={markerColor}
+          markerWidth={markerWidth}
+          canUndo={history.actions.length > 0}
+          canRedo={history.redoActions.length > 0}
+          saveStatus={saveStatus}
+          zoom={camera.scale}
+          boardName={board.name}
+          isDesktopBoardMode={overlay.isDesktopBoardMode}
+          canvasOpacity={canvasOpacity}
+          isFocusMode={isFocusMode}
+          onToolChange={changeTool}
+          onMarkerColorChange={setMarkerColor}
+          onMarkerWidthChange={setMarkerWidth}
+          onUndo={undoLastAction}
+          onRedo={redoLastAction}
+          onResetView={() => setCamera({ x: 0, y: 0, scale: 1 })}
+          onExit={() => void overlay.exit()}
+          onToggleDesktopBoard={() => void overlay.toggle()}
+          onParkDesktop={() => void overlay.park()}
+          onCanvasOpacityChange={setCanvasOpacity}
+          onToggleFocusMode={() => setIsFocusMode((current) => !current)}
+        />
+      )}
+
+      {overlay.isParked && (
+        <div
+          className="desktop-return-hint"
+          role="status"
+          aria-label="Vector is parked. Press Control Shift V to edit."
+        >
+          <span className="desktop-return-mark">V</span>
+          <span>Vector parked</span>
+          <span className="desktop-return-keys" aria-hidden="true">
+            <kbd>Ctrl</kbd>
+            <kbd>Shift</kbd>
+            <kbd>V</kbd>
+          </span>
+          <span>to edit</span>
+        </div>
+      )}
     </div>
   );
 }

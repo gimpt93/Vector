@@ -30,12 +30,20 @@ export type DeleteAction = {
   targetId: number;
 };
 
+/**
+ * A move action captures the *absolute* position of the object after the
+ * move. This keeps the action log self-contained: every action is
+ * independently re-runnable, so undo/redo and save/load never depend on the
+ * history it was extracted from.
+ */
 export type MoveAction = {
   id: number;
   type: "move";
   targetId: number;
-  deltaX: number;
-  deltaY: number;
+  // Absolute position after the move. For lines, `points` is replaced in full.
+  x?: number;
+  y?: number;
+  points?: number[];
 };
 
 export type EditTextAction = {

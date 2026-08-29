@@ -11,13 +11,12 @@ type BoardObjectsLayerProps = {
   onSelect: (id: number) => void;
   onMoveLine: (
     id: number,
-    offsetX: number,
-    offsetY: number,
+    newPoints: number[],
   ) => void;
   onMoveText: (
     id: number,
-    offsetX: number,
-    offsetY: number,
+    nextX: number,
+    nextY: number,
   ) => void;
   onEditText: (text: Extract<BoardObject, { type: "text" }>) => void;
 };
@@ -168,12 +167,19 @@ export default function BoardObjectsLayer({
                 selectLine();
               }}
               onDragEnd={(event) => {
-                onMoveLine(
-                  object.id,
-                  event.target.x(),
-                  event.target.y(),
+                // Translate the line's points by the drag offset and
+                // hand the absolute point set up to the parent, so the
+                // action log captures final positions instead of deltas.
+                const offsetX = event.target.x();
+                const offsetY = event.target.y();
+                const newPoints = object.points.map(
+                  (coordinate, index) =>
+                    coordinate +
+                    (index % 2 === 0
+                      ? offsetX
+                      : offsetY),
                 );
-
+                onMoveLine(object.id, newPoints);
                 event.target.position({ x: 0, y: 0 });
               }}
             >
@@ -266,11 +272,15 @@ export default function BoardObjectsLayer({
               selectText();
             }}
             onDragEnd={(event) => {
-              onMoveText(
-                object.id,
-                event.target.x() - object.x,
-                event.target.y() - object.y,
-              );
+              // Konva's `target.x()` after a drag returns the *new*
+              // absolute position of the text node (the prop x plus
+              // the drag offset). We commit that as the object's
+              // absolute x/y in the action log so the action log
+              // stays self-contained. React-konva will reconcile the
+              // prop change on the next render.
+              const nextX = event.target.x();
+              const nextY = event.target.y();
+              onMoveText(object.id, nextX, nextY);
             }}
           />
         );

@@ -43,22 +43,21 @@ export function resolveBoardActions(
     }
 
     if (action.type === "move") {
+      // Move actions are absolute: a `move` action fully replaces the
+      // object's position. This means re-running or undoing the action
+      // produces the same result regardless of what came before it.
       if (target.type === "line") {
-        objectsById.set(target.id, {
-          ...target,
-          points: target.points.map(
-            (coordinate, index) =>
-              coordinate +
-              (index % 2 === 0
-                ? action.deltaX
-                : action.deltaY),
-          ),
-        });
+        if (action.points) {
+          objectsById.set(target.id, {
+            ...target,
+            points: action.points,
+          });
+        }
       } else {
         objectsById.set(target.id, {
           ...target,
-          x: target.x + action.deltaX,
-          y: target.y + action.deltaY,
+          x: action.x ?? target.x,
+          y: action.y ?? target.y,
         });
       }
 
